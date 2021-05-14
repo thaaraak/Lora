@@ -1,14 +1,45 @@
 # put here your custom config value
-menu "Example Configuration"
-config ESP_WIFI_SSID
-    string "WiFi SSID"
-    default "myssid"
+menu "LoRa Configuration"
+config PIN_NUM_MISO
+    int "MISO"
+    default 19
     help
-	SSID (network name) for the example to connect to.
+	Pin number for SPI MISO.
 
-config ESP_WIFI_PASSWORD
-    string "WiFi Password"
-    default "mypassword"
+config PIN_NUM_MOSI
+    int "MOSI"
+    default 27
     help
-	WiFi password (WPA or WPA2) for the example to use.
+	Pin number for SPI MOSI.
+
+config PIN_NUM_CLK
+    int "CLK"
+    default 5
+    help
+	Pin number for SPI MOSI.
+
+config PIN_NUM_CS
+    int "CS"
+    default 18
+    help
+	Pin number for SPI Chip Select.
+
+config PIN_NUM_CS
+    int "CS"
+    default 18
+    help
+	Pin number for SPI Chip Select.
+
+config PIN_NUM_DIO
+    int "DIO"
+    default 26
+    help
+	Pin number for Data Ready signal from SX1276.
+
+config RESET_PIN
+    int "Reset"
+    default 14
+    help
+	Pin number for Reset pin to SX1276.
+
 endmenu
