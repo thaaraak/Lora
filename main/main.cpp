@@ -74,55 +74,48 @@ bool getConfigPin()
 void lora_task(void* param )
 {
 
-    LoRa lora( PIN_NUM_MOSI, PIN_NUM_MISO, PIN_NUM_CLK, PIN_NUM_CS, RESET_PIN, PIN_NUM_DIO );
+	LoRa lora( PIN_NUM_MOSI, PIN_NUM_MISO, PIN_NUM_CLK, PIN_NUM_CS, RESET_PIN, PIN_NUM_DIO );
 
 	bool _write = getConfigPin();
 	printf( "LoRa configured as %s\n", _write ? "Sender" : "Receiver" );
 
 	gpio_num_t fp = (gpio_num_t) FLASH_PIN;
-
-    gpio_pad_select_gpio( fp );
-    gpio_set_direction( fp , GPIO_MODE_OUTPUT);
-
-	//bool _readIntr = true;
-	//bool _read = false;
+	gpio_pad_select_gpio( fp );
+	gpio_set_direction( fp , GPIO_MODE_OUTPUT);
 
 	if ( !_write )
 		lora.receive(0);
 
 	for ( ;; )
 	{
-			if ( _write )
-			{
-				writeMessage( &lora );
+		if ( _write )
+		{
+			writeMessage( &lora );
 
-			    gpio_set_level( fp, 1);
-			    delay(100);
+			gpio_set_level( fp, 1);
+			delay(100);
 
-			    gpio_set_level( fp, 0);
-				delay(1000);
-			}
-
-			if ( !_write && lora.getDataReceived() )
-			{
-				for ( int i = 0 ; i < 3 ; i++)
-				{
-				    gpio_set_level( fp, 1);
-				    delay(50);
-				    gpio_set_level( fp, 0);
-					delay(50);
-				}
-
-				lora.handleDataReceived();
-				lora.setDataReceived( false );
-			}
-/*
-			if ( _read )
-				readMessage( &lora );
-*/
-			vTaskDelay(10);
-
+			gpio_set_level( fp, 0);
+			delay(1000);
 		}
+
+		if ( !_write && lora.getDataReceived() )
+		{
+			for ( int i = 0 ; i < 3 ; i++)
+			{
+				gpio_set_level( fp, 1);
+				delay(50);
+				gpio_set_level( fp, 0);
+				delay(50);
+			}
+
+			lora.handleDataReceived();
+			lora.setDataReceived( false );
+		}
+
+		vTaskDelay(10);
+
+	}
 
 }
 
