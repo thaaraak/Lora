@@ -99,6 +99,7 @@ void lora_task(void* param )
 			delay(1000);
 		}
 
+
 		if ( !_write && lora.getDataReceived() )
 		{
 			for ( int i = 0 ; i < 3 ; i++)
