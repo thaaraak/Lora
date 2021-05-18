@@ -13,14 +13,14 @@
 static const char *TAG = "LoRa";
 #define ESP_INTR_FLAG_DEFAULT 0
 
-LoRa::LoRa( int mosi, int miso, int clk, int cs, int reset, int dio )
+LoRa::LoRa( int mosi, int miso, int clk, int cs, int reset, int dio, int power )
 {
 	printf( "In LoRa cstor\n");
 
 	initializeSPI( mosi, miso, clk, cs );
 	initializeReset( reset );
 	initializeDIO( dio );
-	initialize();
+	initialize( power );
 
 }
 
@@ -109,7 +109,7 @@ void LoRa::initializeDIO( int dio )
 
 }
 
-void LoRa::initialize()
+void LoRa::initialize( int power )
 {
 	sleep();
 
@@ -123,7 +123,8 @@ void LoRa::initialize()
     writeRegister(REG_LNA, readRegister(REG_LNA) | 0x03);
     writeRegister(REG_MODEM_CONFIG_3, 0x04);
 
-    setTxPower(14, RF_PACONFIG_PASELECT_PABOOST);
+    setTxPower(power, RF_PACONFIG_PASELECT_PABOOST);
+    //setTxPower(power, RF_PACONFIG_PASELECT_RFO);
 
     setSpreadingFactor(11);
 	setSignalBandwidth(125E3);
@@ -208,6 +209,81 @@ void LoRa::setCRC( bool crc )
 		writeRegister(REG_MODEM_CONFIG_2, readRegister(REG_MODEM_CONFIG_2) & 0xfb);
 }
 
+
+// Enables overload current protection (OCP) for PA:
+// 		0x20 OCP enabled
+//		0x00 OCP enabled
+//
+// Trimming of OCP current:
+//		I max = 45+5*OcpTrim [mA] if OcpTrim <= 15 (120 mA) /
+//		I max = -30+10*OcpTrim [mA] if 15 < OcpTrim <= 27 (130 to
+//				240 mA)
+// 		I max = 240mA for higher settings
+//		Default I max = 100mA
+
+void LoRa::setOCP(uint8_t mA)
+{
+	uint8_t ocpTrim = 27;
+
+	if (mA <= 120) ocpTrim = (mA - 45) / 5;
+	else if (mA <=240) ocpTrim = (mA + 30) / 10;
+
+	writeRegister(REG_LR_OCP, 0x20 | (0x1F & ocpTrim));
+}
+
+
+void LoRa::setTxPower(int8_t level, int8_t outputPin)
+{
+
+	// If using the RFO pin for output then the output power
+	// is restricted between 0 and 14 dBm
+
+	if (PA_OUTPUT_RFO_PIN == outputPin)
+	{
+		if (level < 0) level = 0;
+    	else if (level > 14) level = 14;
+
+		writeRegister(REG_PA_CONFIG, 0x70 | level);
+
+	}
+
+	// Otherwise we are using the PA boost pin for output. In this
+	// case if the output power is greater than 17 dBm then we need to
+	// also enable high output on the PA DAC
+
+	else
+	{
+		int paDAC = 0x84;
+
+		if (level > 17)
+		{
+			if (level > 20) level = 20;
+
+			// subtract 3 from level, so 18 - 20 maps to 15 - 17
+			level -= 3;
+
+			// High Power +20 dBm Operation (Semtech SX1276/77/78/79 5.4.3.)
+			paDAC = 0x87;
+			setOCP(140);
+		}
+		else
+		{
+			if (level < 2)
+				level = 2;
+			setOCP(100);
+		}
+
+		int paConfig = PA_BOOST | (level - 2);
+
+		printf( "RegPAConfig: [%02x]\n", paConfig);
+		printf( "RegPADAC: [%02x]\n", paDAC);
+
+		writeRegister(REG_PA_DAC, paDAC);
+		writeRegister(REG_PA_CONFIG, paConfig );
+	}
+}
+
+/*
 void LoRa::setTxPower(int8_t power, int8_t outputPin)
 {
 	  uint8_t paConfig = 0;
@@ -215,6 +291,9 @@ void LoRa::setTxPower(int8_t power, int8_t outputPin)
 
 	  paConfig = readRegister( REG_PA_CONFIG );
 	  paDac = readRegister( REG_PaDac );
+
+	  printf( "Init RegPAConfig: [%02x]\n", paConfig);
+	  printf( "Init RegPADAC: [%02x]\n", paDac);
 
 	  paConfig = ( paConfig & RF_PACONFIG_PASELECT_MASK ) | outputPin;
 	  paConfig = ( paConfig & RF_PACONFIG_MAX_POWER_MASK ) | 0x70;
@@ -266,9 +345,14 @@ void LoRa::setTxPower(int8_t power, int8_t outputPin)
 	    }
 	    paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power + 1 ) & 0x0F );
 	  }
+
+	  printf( "RegPAConfig: [%02x]\n", paConfig);
+	  printf( "RegPADAC: [%02x]\n", paDac);
+
 	  writeRegister( REG_PA_CONFIG, paConfig );
 	  writeRegister( REG_PaDac, paDac );
 }
+*/
 
 void LoRa::explicitHeaderMode()
 {

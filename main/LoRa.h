@@ -40,6 +40,8 @@
 #define REG_DIO_MAPPING_1        0x40
 #define REG_VERSION              0x42
 #define REG_PaDac				 0x4d
+#define REG_PA_DAC               0x4d
+#define PA_BOOST                 0x80
 
 #define MODE_LONG_RANGE_MODE     0x80
 #define MODE_SLEEP               0x00
@@ -69,7 +71,7 @@
 class LoRa
 {
  public:
-	LoRa( int mosi, int miso, int clk, int cs, int reset, int dio );
+	LoRa( int mosi, int miso, int clk, int cs, int reset, int dio, int power );
     
 	int parsePacket(int size);
 	int read();
@@ -86,6 +88,7 @@ class LoRa
 	void explicitHeaderMode();
 	void implicitHeaderMode();
 
+	void setOCP(uint8_t mA);
 	void setTxPower(int8_t power, int8_t outputPin);
 	void setCRC( bool crc );
 	void setSyncWord(int sw);
@@ -100,7 +103,7 @@ class LoRa
 	void initializeSPI( int mosi, int miso, int clk, int cs );
 	void initializeReset( int reset );
 	void initializeDIO( int dio );
-	void initialize();
+	void initialize( int power );
 
 	void setDataReceived( bool r )	{ _dataReceived = r; }
 	bool getDataReceived()	{ return _dataReceived; }

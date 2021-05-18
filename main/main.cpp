@@ -24,11 +24,12 @@ int _counter = 0;
 
 void writeMessage( LoRa* lora )
 {
-	char buf[20];
+	char buf[100];
 	lora->beginPacket(false);
 
-	sprintf( buf, "Counter: [%d]", _counter++);
-	lora->setTxPower(14,RF_PACONFIG_PASELECT_PABOOST);
+	//sprintf( buf, "123456789012345678901234567890123456789012345678901234567890: [%d]", _counter++);
+	sprintf( buf, "Count: [%d]", _counter++);
+	//lora->setTxPower(14,RF_PACONFIG_PASELECT_PABOOST);
 	lora->write( (uint8_t*) buf, (size_t) strlen(buf) );
 	lora->endPacket(false);
 }
@@ -74,7 +75,7 @@ bool getConfigPin()
 void lora_task(void* param )
 {
 
-	LoRa lora( PIN_NUM_MOSI, PIN_NUM_MISO, PIN_NUM_CLK, PIN_NUM_CS, RESET_PIN, PIN_NUM_DIO );
+	LoRa lora( PIN_NUM_MOSI, PIN_NUM_MISO, PIN_NUM_CLK, PIN_NUM_CS, RESET_PIN, PIN_NUM_DIO, 20 );
 
 	bool _write = getConfigPin();
 	printf( "LoRa configured as %s\n", _write ? "Sender" : "Receiver" );
