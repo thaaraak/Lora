@@ -160,6 +160,10 @@ void lora_task( void* param )
 
 void app_main()
 {
+	// Had to set the task size to 10k otherwise I would get various instabilities
+	// Around 2k or less I would get the stack overflow warning but at 2048 it would
+	// just crash in various random ways
+
 	xTaskCreate(lora_task, "lora_task", 10000, NULL, 1, NULL);
 }
 
