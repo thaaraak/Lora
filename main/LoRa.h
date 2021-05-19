@@ -76,7 +76,7 @@ class LoRa
 	int parsePacket(int size);
 	int read();
 	void receive(int size);
-	void handleDataReceived();
+	int handleDataReceived( char *msg );
 	int available();
 
 	void dumpRegisters();
@@ -84,6 +84,7 @@ class LoRa
 	int beginPacket(int implicitHeader);
 	size_t write(const uint8_t *buffer, size_t size);
 	int endPacket(bool async);
+	int getPacketRssi();
 
 	void explicitHeaderMode();
 	void implicitHeaderMode();
@@ -119,6 +120,7 @@ class LoRa
 	int 					_packetIndex = 0;
 	int 					_implicitHeaderMode = 0;
 	bool					_dataReceived = false;
+	long					_frequency;
 
 
 

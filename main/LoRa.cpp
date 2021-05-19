@@ -15,8 +15,6 @@ static const char *TAG = "LoRa";
 
 LoRa::LoRa( int mosi, int miso, int clk, int cs, int reset, int dio, int power )
 {
-	printf( "In LoRa cstor\n");
-
 	initializeSPI( mosi, miso, clk, cs );
 	initializeReset( reset );
 	initializeDIO( dio );
@@ -77,7 +75,7 @@ void LoRa::initializeReset( int reset )
     gpio_set_direction( r, GPIO_MODE_OUTPUT);
 
     gpio_set_level(r, 0);
-    delay(20);
+    delay(50);
     gpio_set_level(r, 1);
     delay(50);
 
@@ -124,9 +122,9 @@ void LoRa::initialize( int power )
     writeRegister(REG_MODEM_CONFIG_3, 0x04);
 
     setTxPower(power, RF_PACONFIG_PASELECT_PABOOST);
-    //setTxPower(power, RF_PACONFIG_PASELECT_RFO);
+    // setTxPower(power, RF_PACONFIG_PASELECT_RFO);
 
-    setSpreadingFactor(11);
+    setSpreadingFactor(12);
 	setSignalBandwidth(125E3);
 	setSyncWord(0x34);
 
@@ -151,6 +149,8 @@ void LoRa::idle()
 
 void LoRa::setFrequency(long frequency)
 {
+	_frequency = frequency;
+
 	uint64_t frf = ((uint64_t)frequency << 19) / 32000000;
 	writeRegister(REG_FRF_MSB, (uint8_t)(frf >> 16));
 	writeRegister(REG_FRF_MID, (uint8_t)(frf >> 8));
@@ -283,76 +283,6 @@ void LoRa::setTxPower(int8_t level, int8_t outputPin)
 	}
 }
 
-/*
-void LoRa::setTxPower(int8_t power, int8_t outputPin)
-{
-	  uint8_t paConfig = 0;
-	  uint8_t paDac = 0;
-
-	  paConfig = readRegister( REG_PA_CONFIG );
-	  paDac = readRegister( REG_PaDac );
-
-	  printf( "Init RegPAConfig: [%02x]\n", paConfig);
-	  printf( "Init RegPADAC: [%02x]\n", paDac);
-
-	  paConfig = ( paConfig & RF_PACONFIG_PASELECT_MASK ) | outputPin;
-	  paConfig = ( paConfig & RF_PACONFIG_MAX_POWER_MASK ) | 0x70;
-
-	  if( ( paConfig & RF_PACONFIG_PASELECT_PABOOST ) == RF_PACONFIG_PASELECT_PABOOST )
-	  {
-	    if( power > 17 )
-	    {
-	      paDac = ( paDac & RF_PADAC_20DBM_MASK ) | RF_PADAC_20DBM_ON;
-	    }
-	    else
-	    {
-	      paDac = ( paDac & RF_PADAC_20DBM_MASK ) | RF_PADAC_20DBM_OFF;
-	    }
-	    if( ( paDac & RF_PADAC_20DBM_ON ) == RF_PADAC_20DBM_ON )
-	    {
-	      if( power < 5 )
-	      {
-	        power = 5;
-	      }
-	      if( power > 20 )
-	      {
-	        power = 20;
-	      }
-	      paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power - 5 ) & 0x0F );
-	    }
-	    else
-	    {
-	      if( power < 2 )
-	      {
-	        power = 2;
-	      }
-	      if( power > 17 )
-	      {
-	        power = 17;
-	      }
-	      paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power - 2 ) & 0x0F );
-	    }
-	  }
-	  else
-	  {
-	    if( power < -1 )
-	    {
-	      power = -1;
-	    }
-	    if( power > 14 )
-	    {
-	      power = 14;
-	    }
-	    paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power + 1 ) & 0x0F );
-	  }
-
-	  printf( "RegPAConfig: [%02x]\n", paConfig);
-	  printf( "RegPADAC: [%02x]\n", paDac);
-
-	  writeRegister( REG_PA_CONFIG, paConfig );
-	  writeRegister( REG_PaDac, paDac );
-}
-*/
 
 void LoRa::explicitHeaderMode()
 {
@@ -456,7 +386,37 @@ void LoRa::receive(int size)
 	writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_RX_CONTINUOUS);
 }
 
-void LoRa::handleDataReceived()
+int LoRa::getPacketRssi()
+{
+	int8_t snr=0;
+    int8_t SnrValue = readRegister( 0x19 );
+    int16_t rssi = readRegister(REG_PKT_RSSI_VALUE);
+
+	if( SnrValue & 0x80 ) // The SNR sign bit is 1
+	{
+		// Invert and divide by 4
+		snr = ( ( ~SnrValue + 1 ) & 0xFF ) >> 2;
+		snr = -snr;
+	}
+	else
+	{
+		// Divide by 4
+		snr = ( SnrValue & 0xFF ) >> 2;
+	}
+    if(snr<0)
+    {
+    	rssi = rssi - (_frequency < 525E6 ? 164 : 157) + ( rssi >> 4 ) + snr;
+    }
+    else
+    {
+    	rssi = rssi - (_frequency < 525E6 ? 164 : 157) + ( rssi >> 4 );
+    }
+
+  return ( rssi );
+}
+
+
+int LoRa::handleDataReceived( char *msg )
 {
 	int irqFlags = readRegister(REG_IRQ_FLAGS);
 	writeRegister(REG_IRQ_FLAGS, irqFlags);
@@ -475,11 +435,14 @@ void LoRa::handleDataReceived()
 //		if (_onReceive) { _onReceive(packetLength); }
 
 		for (int i = 0; i < packetLength; i++)
-			printf( "%c", read() );
-		printf( "\n");
+			*msg++ = read();
+		*msg = '\0';
 
 		writeRegister(REG_FIFO_ADDR_PTR, 0);
-  }
+		return packetLength;
+	}
+
+	return 0;
 }
 
 int LoRa::parsePacket(int size)
@@ -535,7 +498,7 @@ void LoRa::delay( int msec )
 
 void LoRa::writeRegister( uint8_t reg, uint8_t data )
 {
-//    printf("Writing Register [%02x]=[%02x]\n", reg, data);
+    //printf("Writing Register [%02x]=[%02x]\n", reg, data);
 	reg = reg | 0x80;
 
 	spi_transaction_t transaction;

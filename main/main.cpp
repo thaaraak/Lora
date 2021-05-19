@@ -9,6 +9,7 @@
 #include "driver/gpio.h"
 
 #include "LoRa.h"
+#include "OLED.h"
 
 #define PIN_NUM_MISO 	19
 #define PIN_NUM_MOSI 	27
@@ -21,6 +22,9 @@
 #define	FLASH_PIN			25
 
 int _counter = 0;
+OLED *_oled;
+OLEDDISPLAY_COLOR _color = WHITE;
+
 
 void writeMessage( LoRa* lora )
 {
@@ -29,9 +33,17 @@ void writeMessage( LoRa* lora )
 
 	//sprintf( buf, "123456789012345678901234567890123456789012345678901234567890: [%d]", _counter++);
 	sprintf( buf, "Count: [%d]", _counter++);
+
 	//lora->setTxPower(14,RF_PACONFIG_PASELECT_PABOOST);
 	lora->write( (uint8_t*) buf, (size_t) strlen(buf) );
 	lora->endPacket(false);
+
+	char msg[200];
+	sprintf( msg, "Sender\n%s", buf );
+	_oled->clear();
+	_oled->drawString(0, 12, msg, _color );
+	_oled->sendDataBack();
+
 }
 
 void readMessage( LoRa* lora )
@@ -40,7 +52,12 @@ void readMessage( LoRa* lora )
 
 	if (packetSize)
 	{
-		printf( "Received packet size: [%d]\n", packetSize );
+		char msg[200];
+		sprintf( msg, "Receiver: %d", packetSize );
+		_oled->clear();
+		_oled->drawString(0, 12, msg, _color );
+		_oled->sendDataBack();
+
 		for (int i = 0; i < packetSize; i++)
 			printf( "%c", lora->read() );
 
@@ -72,23 +89,34 @@ bool getConfigPin()
     return gpio_get_level( pin ) == 0;
 }
 
-void lora_task(void* param )
+//void app_main()
+void lora_task( void* param )
 {
 
-	LoRa lora( PIN_NUM_MOSI, PIN_NUM_MISO, PIN_NUM_CLK, PIN_NUM_CS, RESET_PIN, PIN_NUM_DIO, 20 );
+	_oled = new OLED( 128, 64, 4, 15, 16 );
+	_oled->setFont(ArialMT_Plain_16 );
+	_oled->clear();
+	_oled->sendData();
+
+	_oled->clear();
+	_oled->drawString(0, 12, "Starting...", _color );
+	_oled->sendDataBack();
+
+	LoRa lora( PIN_NUM_MOSI, PIN_NUM_MISO, PIN_NUM_CLK, PIN_NUM_CS, RESET_PIN, PIN_NUM_DIO, 10 );
 
 	bool _write = getConfigPin();
-	printf( "LoRa configured as %s\n", _write ? "Sender" : "Receiver" );
 
 	gpio_num_t fp = (gpio_num_t) FLASH_PIN;
 	gpio_pad_select_gpio( fp );
 	gpio_set_direction( fp , GPIO_MODE_OUTPUT);
+
 
 	if ( !_write )
 		lora.receive(0);
 
 	for ( ;; )
 	{
+
 		if ( _write )
 		{
 			writeMessage( &lora );
@@ -110,8 +138,17 @@ void lora_task(void* param )
 				delay(50);
 			}
 
-			lora.handleDataReceived();
+			char buf[200];
+			char msg[100];
+
+			int packetSize = lora.handleDataReceived( msg );
 			lora.setDataReceived( false );
+
+			sprintf( buf, "<%10s>\n(%d) RSSI: %d", msg, packetSize, lora.getPacketRssi() );
+
+			_oled->clear();
+			_oled->drawString(0, 12, buf, _color );
+			_oled->sendDataBack();
 		}
 
 		vTaskDelay(10);
@@ -120,8 +157,9 @@ void lora_task(void* param )
 
 }
 
+
 void app_main()
 {
-	xTaskCreate(lora_task, "lora_task", 2048, NULL, 1, NULL);
+	xTaskCreate(lora_task, "lora_task", 10000, NULL, 1, NULL);
 }
 
